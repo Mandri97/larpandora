@@ -131,6 +131,22 @@ namespace lar_pandora {
       kAddDaughters = 2     // Absorb daughter particles into parent particles
     };
 
+    template <typename T>
+    static void CollectProducts(const art::Event& evt,
+                                const std::string& label,
+                                std::vector<art::Ptr<T>>& productVector);
+
+    template <typename T, typename U>
+    static void CollectWithDownstreamProducts(const art::Event& evt,
+                                              const std::string& label,
+                                              std::vector<art::Ptr<T>>& productVector,
+                                              std::map<art::Ptr<T>, std::vector<art::Ptr<U>>>& productToDownstream);
+    template <typename T, typename U>
+    static void CollectWithUpstreamProducts(const art::Event& evt,
+                                            const std::string& label,
+                                            std::vector<art::Ptr<T>>& productVector,
+                                            std::map<art::Ptr<U>, std::vector<art::Ptr<T>>>& productToUpstream);
+
     /**
      *  @brief Collect the reconstructed wires from the ART event record
      *

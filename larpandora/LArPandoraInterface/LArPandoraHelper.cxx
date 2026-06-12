@@ -49,21 +49,7 @@ namespace lar_pandora {
                                       const std::string& label,
                                       WireVector& wireVector)
   {
-    art::Handle<std::vector<recob::Wire>> theWires;
-    evt.getByLabel(label, theWires);
-
-    if (!theWires.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find wires... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theWires->size() << " Wires " << std::endl;
-    }
-
-    for (unsigned int i = 0; i < theWires->size(); ++i) {
-      const art::Ptr<recob::Wire> wire(theWires, i);
-      wireVector.push_back(wire);
-    }
+    CollectProducts<recob::Wire>(evt, label, wireVector);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -72,21 +58,7 @@ namespace lar_pandora {
                                      const std::string& label,
                                      HitVector& hitVector)
   {
-    art::Handle<std::vector<recob::Hit>> theHits;
-    evt.getByLabel(label, theHits);
-
-    if (!theHits.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find hits... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theHits->size() << " Hits " << std::endl;
-    }
-
-    for (unsigned int i = 0; i < theHits->size(); ++i) {
-      const art::Ptr<recob::Hit> hit(theHits, i);
-      hitVector.push_back(hit);
-    }
+    CollectProducts<recob::Hit>(evt, label, hitVector);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -96,45 +68,32 @@ namespace lar_pandora {
                                                  HitToScores& hitToScores,
                                                  HitToScoreLabels& hitToScoreLabels)
   {
+    constexpr int nFilterFeature = 1;
+    constexpr int nSemanticFeature = 5;
 
-    art::Handle<std::vector<recob::Hit>> theHits;
-    evt.getByLabel(label, theHits);
+    art::ValidHandle<std::vector<recob::Hit>> theHits = 
+      evt.getValidHandle<std::vector<recob::Hit>>(label);
 
-    if (!theHits.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find hits... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theHits->size() << " Hits " << std::endl;
-    }
+    mf::LogDebug("LArPandora") << "  Found: " << theHits->size() << " Hits " 
+                               << std::endl;
 
-    art::Handle<std::vector<anab::FeatureVector<1>>> filterHandle;
-    evt.getByLabel(label, filterHandle);
+    art::ValidHandle<std::vector<anab::FeatureVector<nFilterFeature>>> filterHandle = 
+      evt.getValidHandle<std::vector<anab::FeatureVector<nFilterFeature>>>(label);
+    art::ValidHandle<std::vector<anab::FeatureVector<nSemanticFeature>>> semanticHandle = 
+      evt.getValidHandle<std::vector<anab::FeatureVector<nSemanticFeature>>>(label);
 
-    if (!filterHandle.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find the NuGraph filter label... " << std::endl;
-      return;
-    }
+    const std::vector<std::string> hitScoreLabels = {
+      "filter", "mip", "hip", "shower", "michel", "diffuse"};
 
-    art::Handle<std::vector<anab::FeatureVector<5>>> semanticHandle;
-    evt.getByLabel(label, semanticHandle);
-
-    if (!semanticHandle.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find the NuGraph semantic label... " << std::endl;
-      return;
-    }
-
-    for (unsigned int i = 0; i < theHits->size(); ++i) {
+    for (size_t i = 0; i < theHits->size(); ++i) {
       const art::Ptr<recob::Hit> hit(theHits, i);
 
       const float filterScore = filterHandle->at(i).at(0);
       const auto& semanticScores = semanticHandle->at(i);
 
       std::vector<float> hitScores = {filterScore};
-      for (unsigned int j = 0; j < semanticScores.size(); ++j)
-        hitScores.push_back(semanticScores[j]);
-      std::vector<std::string> hitScoreLabels = {
-        "filter", "mip", "hip", "shower", "michel", "diffuse"};
+      for (size_t j = 0; j < semanticScores.size(); ++j)
+        hitScores.push_back(semanticScores.at(j));
 
       hitToScores[hit] = hitScores;
       hitToScoreLabels[hit] = hitScoreLabels;
@@ -147,22 +106,7 @@ namespace lar_pandora {
                                             const std::string& label,
                                             PFParticleVector& particleVector)
   {
-    art::Handle<std::vector<recob::PFParticle>> theParticles;
-    evt.getByLabel(label, theParticles);
-
-    if (!theParticles.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find particles... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theParticles->size() << " PFParticles "
-                                 << std::endl;
-    }
-
-    for (unsigned int i = 0; i < theParticles->size(); ++i) {
-      const art::Ptr<recob::PFParticle> particle(theParticles, i);
-      particleVector.push_back(particle);
-    }
+    CollectProducts<recob::PFParticle>(evt, label, particleVector);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -185,22 +129,18 @@ namespace lar_pandora {
                                             SpacePointsToHits& spacePointsToHits,
                                             HitsToSpacePoints& hitsToSpacePoints)
   {
-    art::Handle<std::vector<recob::SpacePoint>> theSpacePoints;
-    evt.getByLabel(label, theSpacePoints);
+    art::ValidHandle<std::vector<recob::SpacePoint>> theSpacePoints = 
+      evt.getValidHandle<std::vector<recob::SpacePoint>>(label);
 
-    if (!theSpacePoints.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find spacepoints... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theSpacePoints->size() << " SpacePoints "
-                                 << std::endl;
-    }
+    mf::LogDebug("LArPandora") << "  Found: " << theSpacePoints->size() << " SpacePoints "
+                               << std::endl;
 
     art::FindOneP<recob::Hit> theHitAssns(theSpacePoints, evt, label);
-    for (unsigned int i = 0; i < theSpacePoints->size(); ++i) {
+
+    for (size_t i = 0; i < theSpacePoints->size(); ++i) {
       const art::Ptr<recob::SpacePoint> spacepoint(theSpacePoints, i);
       spacePointVector.push_back(spacepoint);
+
       const art::Ptr<recob::Hit> hit = theHitAssns.at(i);
       spacePointsToHits[spacepoint] = hit;
       hitsToSpacePoints[hit] = spacepoint;
@@ -214,28 +154,7 @@ namespace lar_pandora {
                                          ClusterVector& clusterVector,
                                          ClustersToHits& clustersToHits)
   {
-    art::Handle<std::vector<recob::Cluster>> theClusters;
-    evt.getByLabel(label, theClusters);
-
-    if (!theClusters.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find clusters... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theClusters->size() << " Clusters " << std::endl;
-    }
-
-    art::FindManyP<recob::Hit> theHitAssns(theClusters, evt, label);
-    for (unsigned int i = 0; i < theClusters->size(); ++i) {
-      const art::Ptr<recob::Cluster> cluster(theClusters, i);
-      clusterVector.push_back(cluster);
-
-      const std::vector<art::Ptr<recob::Hit>> hits = theHitAssns.at(i);
-      for (unsigned int j = 0; j < hits.size(); ++j) {
-        const art::Ptr<recob::Hit> hit = hits.at(j);
-        clustersToHits[cluster].push_back(hit);
-      }
-    }
+    CollectWithDownstreamProducts<recob::Cluster, recob::Hit>(evt, label, clusterVector, clustersToHits);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -245,29 +164,7 @@ namespace lar_pandora {
                                             PFParticleVector& particleVector,
                                             PFParticlesToSpacePoints& particlesToSpacePoints)
   {
-    art::Handle<std::vector<recob::PFParticle>> theParticles;
-    evt.getByLabel(label, theParticles);
-
-    if (!theParticles.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find particles... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theParticles->size() << " PFParticles "
-                                 << std::endl;
-    }
-
-    art::FindManyP<recob::SpacePoint> theSpacePointAssns(theParticles, evt, label);
-    for (unsigned int i = 0; i < theParticles->size(); ++i) {
-      const art::Ptr<recob::PFParticle> particle(theParticles, i);
-      particleVector.push_back(particle);
-
-      const std::vector<art::Ptr<recob::SpacePoint>> spacepoints = theSpacePointAssns.at(i);
-      for (unsigned int j = 0; j < spacepoints.size(); ++j) {
-        const art::Ptr<recob::SpacePoint> spacepoint = spacepoints.at(j);
-        particlesToSpacePoints[particle].push_back(spacepoint);
-      }
-    }
+    CollectWithDownstreamProducts<recob::PFParticle, recob::SpacePoint>(evt, label, particleVector, particlesToSpacePoints);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -277,29 +174,7 @@ namespace lar_pandora {
                                             PFParticleVector& particleVector,
                                             PFParticlesToClusters& particlesToClusters)
   {
-    art::Handle<std::vector<recob::PFParticle>> theParticles;
-    evt.getByLabel(label, theParticles);
-
-    if (!theParticles.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find particles... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theParticles->size() << " PFParticles "
-                                 << std::endl;
-    }
-
-    art::FindManyP<recob::Cluster> theClusterAssns(theParticles, evt, label);
-    for (unsigned int i = 0; i < theParticles->size(); ++i) {
-      const art::Ptr<recob::PFParticle> particle(theParticles, i);
-      particleVector.push_back(particle);
-
-      const std::vector<art::Ptr<recob::Cluster>> clusters = theClusterAssns.at(i);
-      for (unsigned int j = 0; j < clusters.size(); ++j) {
-        const art::Ptr<recob::Cluster> cluster = clusters.at(j);
-        particlesToClusters[particle].push_back(cluster);
-      }
-    }
+    CollectWithDownstreamProducts<recob::PFParticle, recob::Cluster>(evt, label, particleVector, particlesToClusters);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -309,31 +184,7 @@ namespace lar_pandora {
                                                    PFParticleVector& particleVector,
                                                    PFParticlesToMetadata& particlesToMetadata)
   {
-    art::Handle<std::vector<recob::PFParticle>> theParticles;
-    evt.getByLabel(label, theParticles);
-
-    if (!theParticles.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find particles... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theParticles->size() << " PFParticles "
-                                 << std::endl;
-    }
-
-    art::FindManyP<larpandoraobj::PFParticleMetadata> theMetadataAssns(theParticles, evt, label);
-    for (unsigned int i = 0; i < theParticles->size(); ++i) {
-      const art::Ptr<recob::PFParticle> particle(theParticles, i);
-      particleVector.push_back(particle);
-
-      const std::vector<art::Ptr<larpandoraobj::PFParticleMetadata>> pfParticleMetadataList =
-        theMetadataAssns.at(i);
-      for (unsigned int j = 0; j < pfParticleMetadataList.size(); ++j) {
-        const art::Ptr<larpandoraobj::PFParticleMetadata> pfParticleMetadata =
-          pfParticleMetadataList.at(j);
-        particlesToMetadata[particle].push_back(pfParticleMetadata);
-      }
-    }
+    CollectWithDownstreamProducts<recob::PFParticle, larpandoraobj::PFParticleMetadata>(evt, label, particleVector, particlesToMetadata);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -343,28 +194,7 @@ namespace lar_pandora {
                                         ShowerVector& showerVector,
                                         PFParticlesToShowers& particlesToShowers)
   {
-    art::Handle<std::vector<recob::Shower>> theShowers;
-    evt.getByLabel(label, theShowers);
-
-    if (!theShowers.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find showers... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theShowers->size() << " Showers " << std::endl;
-    }
-
-    art::FindManyP<recob::PFParticle> theShowerAssns(theShowers, evt, label);
-    for (unsigned int i = 0; i < theShowers->size(); ++i) {
-      const art::Ptr<recob::Shower> shower(theShowers, i);
-      showerVector.push_back(shower);
-
-      const std::vector<art::Ptr<recob::PFParticle>> particles = theShowerAssns.at(i);
-      for (unsigned int j = 0; j < particles.size(); ++j) {
-        const art::Ptr<recob::PFParticle> particle = particles.at(j);
-        particlesToShowers[particle].push_back(shower);
-      }
-    }
+    CollectWithUpstreamProducts<recob::Shower, recob::PFParticle>(evt, label, showerVector, particlesToShowers);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -374,28 +204,7 @@ namespace lar_pandora {
                                        TrackVector& trackVector,
                                        PFParticlesToTracks& particlesToTracks)
   {
-    art::Handle<std::vector<recob::Track>> theTracks;
-    evt.getByLabel(label, theTracks);
-
-    if (!theTracks.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find tracks... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theTracks->size() << " Tracks " << std::endl;
-    }
-
-    art::FindManyP<recob::PFParticle> theTrackAssns(theTracks, evt, label);
-    for (unsigned int i = 0; i < theTracks->size(); ++i) {
-      const art::Ptr<recob::Track> track(theTracks, i);
-      trackVector.push_back(track);
-
-      const std::vector<art::Ptr<recob::PFParticle>> particles = theTrackAssns.at(i);
-      for (unsigned int j = 0; j < particles.size(); ++j) {
-        const art::Ptr<recob::PFParticle> particle = particles.at(j);
-        particlesToTracks[particle].push_back(track);
-      }
-    }
+    CollectWithUpstreamProducts<recob::Track, recob::PFParticle>(evt, label, trackVector, particlesToTracks);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -405,28 +214,7 @@ namespace lar_pandora {
                                        TrackVector& trackVector,
                                        TracksToHits& tracksToHits)
   {
-    art::Handle<std::vector<recob::Track>> theTracks;
-    evt.getByLabel(label, theTracks);
-
-    if (!theTracks.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find tracks... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theTracks->size() << " Tracks " << std::endl;
-    }
-
-    art::FindManyP<recob::Hit> theHitAssns(theTracks, evt, label);
-    for (unsigned int i = 0; i < theTracks->size(); ++i) {
-      const art::Ptr<recob::Track> track(theTracks, i);
-      trackVector.push_back(track);
-
-      const std::vector<art::Ptr<recob::Hit>> hits = theHitAssns.at(i);
-      for (unsigned int j = 0; j < hits.size(); ++j) {
-        const art::Ptr<recob::Hit> hit = hits.at(j);
-        tracksToHits[track].push_back(hit);
-      }
-    }
+    CollectWithDownstreamProducts<recob::Track, recob::Hit>(evt, label, trackVector, tracksToHits);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -436,28 +224,7 @@ namespace lar_pandora {
                                         ShowerVector& showerVector,
                                         ShowersToHits& showersToHits)
   {
-    art::Handle<std::vector<recob::Shower>> theShowers;
-    evt.getByLabel(label, theShowers);
-
-    if (!theShowers.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find showers... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theShowers->size() << " Showers " << std::endl;
-    }
-
-    art::FindManyP<recob::Hit> theHitAssns(theShowers, evt, label);
-    for (unsigned int i = 0; i < theShowers->size(); ++i) {
-      const art::Ptr<recob::Shower> shower(theShowers, i);
-      showerVector.push_back(shower);
-
-      const std::vector<art::Ptr<recob::Hit>> hits = theHitAssns.at(i);
-      for (unsigned int j = 0; j < hits.size(); ++j) {
-        const art::Ptr<recob::Hit> hit = hits.at(j);
-        showersToHits[shower].push_back(hit);
-      }
-    }
+    CollectWithDownstreamProducts<recob::Shower, recob::Hit>(evt, label, showerVector, showersToHits);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -467,30 +234,9 @@ namespace lar_pandora {
                                       SeedVector& seedVector,
                                       PFParticlesToSeeds& particlesToSeeds)
   {
-    art::Handle<std::vector<recob::Seed>> theSeeds;
-    evt.getByLabel(label, theSeeds);
-
-    if (!theSeeds.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find seeds... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theSeeds->size() << " Seeds " << std::endl;
-    }
-
-    art::FindManyP<recob::PFParticle> theSeedAssns(theSeeds, evt, label);
-    for (unsigned int i = 0; i < theSeeds->size(); ++i) {
-      const art::Ptr<recob::Seed> seed(theSeeds, i);
-      seedVector.push_back(seed);
-
-      const std::vector<art::Ptr<recob::PFParticle>> particles = theSeedAssns.at(i);
-      for (unsigned int j = 0; j < particles.size(); ++j) {
-        const art::Ptr<recob::PFParticle> particle = particles.at(j);
-        particlesToSeeds[particle].push_back(seed);
-      }
-    }
+    CollectWithUpstreamProducts<recob::Seed, recob::PFParticle>(evt, label, seedVector, particlesToSeeds);
   }
-
+    
   //------------------------------------------------------------------------------------------------------------------------------------------
 
   void LArPandoraHelper::CollectSeeds(const art::Event& evt,
@@ -498,16 +244,10 @@ namespace lar_pandora {
                                       SeedVector& seedVector,
                                       SeedsToHits& seedsToHits)
   {
-    art::Handle<std::vector<recob::Seed>> theSeeds;
-    evt.getByLabel(label, theSeeds);
+    art::ValidHandle<std::vector<recob::Seed>> theSeeds = 
+      evt.getValidHandle<std::vector<recob::Seed>>(label);
 
-    if (!theSeeds.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find seeds... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theSeeds->size() << " Seeds " << std::endl;
-    }
+    mf::LogDebug("LArPandora") << "  Found: " << theSeeds->size() << " Seeds " << std::endl;
 
     art::FindOneP<recob::Hit> theHitAssns(theSeeds, evt, label);
 
@@ -516,14 +256,14 @@ namespace lar_pandora {
       return;
     }
 
-    for (unsigned int i = 0; i < theSeeds->size(); ++i) {
+    for (size_t i = 0; i < theSeeds->size(); ++i) {
       const art::Ptr<recob::Seed> seed(theSeeds, i);
       seedVector.push_back(seed);
       const art::Ptr<recob::Hit> hit = theHitAssns.at(i);
       seedsToHits[seed] = hit;
     }
   }
-
+    
   //------------------------------------------------------------------------------------------------------------------------------------------
 
   void LArPandoraHelper::CollectVertices(const art::Event& evt,
@@ -531,30 +271,9 @@ namespace lar_pandora {
                                          VertexVector& vertexVector,
                                          PFParticlesToVertices& particlesToVertices)
   {
-    art::Handle<std::vector<recob::Vertex>> theVertices;
-    evt.getByLabel(label, theVertices);
-
-    if (!theVertices.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find vertices... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theVertices->size() << " Vertices " << std::endl;
-    }
-
-    art::FindManyP<recob::PFParticle> theVerticesAssns(theVertices, evt, label);
-    for (unsigned int i = 0; i < theVertices->size(); ++i) {
-      const art::Ptr<recob::Vertex> vertex(theVertices, i);
-      vertexVector.push_back(vertex);
-
-      const std::vector<art::Ptr<recob::PFParticle>> particles = theVerticesAssns.at(i);
-      for (unsigned int j = 0; j < particles.size(); ++j) {
-        const art::Ptr<recob::PFParticle> particle = particles.at(j);
-        particlesToVertices[particle].push_back(vertex);
-      }
-    }
+    CollectWithUpstreamProducts<recob::Vertex, recob::PFParticle>(evt, label, vertexVector, particlesToVertices);
   }
-
+    
   //------------------------------------------------------------------------------------------------------------------------------------------
 
   void LArPandoraHelper::BuildPFParticleHitMaps(
@@ -791,7 +510,7 @@ namespace lar_pandora {
     if (theCosmicTags.isValid()) {
       art::FindOneP<recob::Track> theCosmicAssns(
         theCosmicTags, evt, label); // We assume there is one tag per algorithm
-      for (unsigned int i = 0; i < theCosmicTags->size(); ++i) {
+      for (size_t i = 0; i < theCosmicTags->size(); ++i) {
         const art::Ptr<anab::CosmicTag> cosmicTag(theCosmicTags, i);
         const art::Ptr<recob::Track> track = theCosmicAssns.at(i);
         tracksToCosmicTags[track].push_back(
@@ -813,12 +532,12 @@ namespace lar_pandora {
 
     if (theT0s.isValid()) {
       art::FindManyP<recob::PFParticle> theAssns(theT0s, evt, label);
-      for (unsigned int i = 0; i < theT0s->size(); ++i) {
+      for (size_t i = 0; i < theT0s->size(); ++i) {
         const art::Ptr<anab::T0> theT0(theT0s, i);
         t0Vector.push_back(theT0);
 
         const std::vector<art::Ptr<recob::PFParticle>> particles = theAssns.at(i);
-        for (unsigned int j = 0; j < particles.size(); ++j) {
+        for (size_t j = 0; j < particles.size(); ++j) {
           const art::Ptr<recob::PFParticle> theParticle = particles.at(j);
           particlesToT0s[theParticle].push_back(
             theT0); // We assume there could be multiple T0s per PFParticle
@@ -848,7 +567,7 @@ namespace lar_pandora {
       areSimChannelsValid = true;
     }
 
-    for (unsigned int i = 0; i < theSimChannels->size(); ++i) {
+    for (size_t i = 0; i < theSimChannels->size(); ++i) {
       const art::Ptr<sim::SimChannel> channel(theSimChannels, i);
       simChannelVector.push_back(channel);
     }
@@ -860,19 +579,10 @@ namespace lar_pandora {
                                             const std::string& label,
                                             MCParticleVector& particleVector)
   {
-    art::Handle<RawMCParticleVector> theParticles;
-    evt.getByLabel(label, theParticles);
+    art::ValidHandle<RawMCParticleVector> theParticles = 
+        evt.getValidHandle<RawMCParticleVector>(label);
 
-    if (!theParticles.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find MC particles... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theParticles->size() << " MC particles "
-                                 << std::endl;
-    }
-
-    for (unsigned int i = 0; i < theParticles->size(); ++i) {
+    for (size_t i = 0; i < theParticles->size(); ++i) {
       const art::Ptr<simb::MCParticle> particle(theParticles, i);
       particleVector.push_back(particle);
     }
@@ -884,18 +594,8 @@ namespace lar_pandora {
                                                      const std::string& label,
                                                      RawMCParticleVector& particleVector)
   {
-    art::Handle<std::vector<simb::MCTruth>> mcTruthBlocks;
-    evt.getByLabel(label, mcTruthBlocks);
-
-    if (!mcTruthBlocks.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find MC truth blocks from generator... "
-                                 << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << mcTruthBlocks->size() << " MC truth blocks "
-                                 << std::endl;
-    }
+    art::ValidHandle<std::vector<simb::MCTruth>> mcTruthBlocks =
+        evt.getValidHandle<std::vector<simb::MCTruth>>(label);
 
     if (mcTruthBlocks->size() < 1)
       throw cet::exception("LArPandora") << " PandoraCollector::CollectGeneratorMCParticles --- "
@@ -916,21 +616,12 @@ namespace lar_pandora {
                                             MCTruthToMCParticles& truthToParticles,
                                             MCParticlesToMCTruth& particlesToTruth)
   {
-    art::Handle<RawMCParticleVector> theParticles;
-    evt.getByLabel(label, theParticles);
-
-    if (!theParticles.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find MC particles... " << std::endl;
-      return;
-    }
-    else {
-      mf::LogDebug("LArPandora") << "  Found: " << theParticles->size() << " MC particles "
-                                 << std::endl;
-    }
+    art::ValidHandle<RawMCParticleVector> theParticles = 
+        evt.getValidHandle<RawMCParticleVector>(label);
 
     art::FindOneP<simb::MCTruth> theTruthAssns(theParticles, evt, label);
 
-    for (unsigned int i = 0, iEnd = theParticles->size(); i < iEnd; ++i) {
+    for (size_t i = 0, iEnd = theParticles->size(); i < iEnd; ++i) {
       const art::Ptr<simb::MCParticle> particle(theParticles, i);
       const art::Ptr<simb::MCTruth> truth(theTruthAssns.at(i));
       truthToParticles[truth].push_back(particle);
@@ -961,7 +652,7 @@ namespace lar_pandora {
     for (HitVector::const_iterator iter = hitVector.begin(), iterEnd = hitVector.end();
          iter != iterEnd;
          ++iter) {
-      const art::Ptr<recob::Hit> hit = *iter;
+      const auto hit = *iter;
 
       SimChannelMap::const_iterator sIter = simChannelMap.find(hit->Channel());
       if (simChannelMap.end() == sIter) continue; // Hit has no truth information [continue]
@@ -979,7 +670,7 @@ namespace lar_pandora {
 
       if (trackCollection.empty()) continue; // Hit has no truth information [continue]
 
-      for (unsigned int iTrack = 0, iTrackEnd = trackCollection.size(); iTrack < iTrackEnd;
+      for (size_t iTrack = 0, iTrackEnd = trackCollection.size(); iTrack < iTrackEnd;
            ++iTrack) {
         const sim::TrackIDE trackIDE = trackCollection.at(iTrack);
         hitsToTrackIDEs[hit].push_back(trackIDE);
@@ -1094,20 +785,11 @@ namespace lar_pandora {
                                                 HitsToTrackIDEs& hitsToTrackIDEs)
   {
     // Start by getting the collection of Hits
-    art::Handle<std::vector<recob::Hit>> theHits;
-    evt.getByLabel(hitLabel, theHits);
-
-    if (!theHits.isValid()) {
-      mf::LogDebug("LArPandora") << "  Failed to find hits... " << std::endl;
-      return;
-    }
+    art::ValidHandle<std::vector<recob::Hit>> theHits = 
+        evt.getValidHandle<std::vector<recob::Hit>>(hitLabel);
 
     HitVector hitVector;
-
-    for (unsigned int i = 0; i < theHits->size(); ++i) {
-      const art::Ptr<recob::Hit> hit(theHits, i);
-      hitVector.push_back(hit);
-    }
+    CollectHits(evt, hitLabel, hitVector);
 
     // Now get the associations between Hits and MCParticles
     std::vector<anab::BackTrackerHitMatchingData const*> backtrackerVector;
@@ -1132,7 +814,7 @@ namespace lar_pandora {
       backtrackerVector.clear();
       particles_per_hit.get(hit.key(), particleVector, backtrackerVector);
 
-      for (unsigned int j = 0; j < particleVector.size(); ++j) {
+      for (size_t j = 0; j < particleVector.size(); ++j) {
         const art::Ptr<simb::MCParticle> particle = particleVector[j];
 
         sim::TrackIDE trackIDE;
@@ -1175,8 +857,8 @@ namespace lar_pandora {
                                            const pandora::IntVector* const indexVector)
   {
 
-    art::Handle<std::vector<T>> handle;
-    evt.getByLabel(label, handle);
+    art::ValidHandle<std::vector<T>> handle = 
+        evt.getValidHandle<std::vector<T>>(label);
     art::FindManyP<recob::Hit> hitAssoc(handle, evt, label);
 
     if (indexVector != nullptr) {
@@ -1210,7 +892,6 @@ namespace lar_pandora {
          iter != iterEnd;
          ++iter) {
       const art::Ptr<simb::MCParticle> particle = *iter;
-      particleMap[particle->TrackId()] = particle;
       particleMap[particle->TrackId()] = particle;
     }
   }
@@ -1514,8 +1195,82 @@ namespace lar_pandora {
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
+
+  template <typename T>
+  void LArPandoraHelper::CollectProducts(const art::Event& evt,
+                                         const std::string& label,
+                                         std::vector<art::Ptr<T>>& productVector)
+  {
+    const auto &handle{ evt.getValidHandle<std::vector<T>>(label) };
+
+    // TODO: Demangle typeid(T).name()
+    mf::LogDebug("LArPandora") << "  Found: " << handle->size() << " " << typeid(T).name()
+                               << std::endl;
+
+    for (size_t i = 0; i < handle->size(); ++i) {
+        const art::Ptr<T> product(handle, i);
+        productVector.push_back(product);
+    }
+  }
+
   //------------------------------------------------------------------------------------------------------------------------------------------
 
+  template <typename T, typename U>
+  void LArPandoraHelper::CollectWithDownstreamProducts(const art::Event& evt,
+                                                       const std::string& label,
+                                                       std::vector<art::Ptr<T>>& productVector,
+                                                       std::map<art::Ptr<T>, std::vector<art::Ptr<U>>>& productToComponent)
+  {
+    art::ValidHandle<std::vector<T>> products = 
+        evt.getValidHandle<std::vector<T>>(label);
+
+    // TODO: Demangle this
+    mf::LogDebug("LArPandora") << "  Found: " << products->size() << " " << typeid(T).name()
+                               << std::endl;
+    
+    art::FindManyP<U> assns(products, evt, label);
+    for (size_t i = 0; i < products->size(); ++i) {
+      const art::Ptr<T> product(products, i);
+      productVector.push_back(product);
+
+      const std::vector<art::Ptr<U>> components = assns.at(i);
+      for (size_t j = 0; j < components.size(); ++j) {
+        const art::Ptr<U> component = components.at(j);
+        productToComponent[product].push_back(component);
+      }
+    }
+  }
+
+  //------------------------------------------------------------------------------------------------------------------------------------------
+  
+  template <typename T, typename U>
+  void LArPandoraHelper::CollectWithUpstreamProducts(const art::Event& evt,
+                                                     const std::string& label,
+                                                     std::vector<art::Ptr<T>>& productVector,
+                                                     std::map<art::Ptr<U>, std::vector<art::Ptr<T>>>& productToComponent)
+  {
+    art::ValidHandle<std::vector<T>> products = 
+        evt.getValidHandle<std::vector<T>>(label);
+
+    // TODO: Demangle this
+    mf::LogDebug("LArPandora") << "  Found: " << products->size() << " " << typeid(T).name()
+                               << std::endl;
+    
+    art::FindManyP<U> assns(products, evt, label);
+    for (size_t i = 0; i < products->size(); ++i) {
+      const art::Ptr<T> product(products, i);
+      productVector.push_back(product);
+
+      const std::vector<art::Ptr<U>> components = assns.at(i);
+      for (size_t j = 0; j < components.size(); ++j) {
+        const art::Ptr<U> component = components.at(j);
+        productToComponent[component].push_back(product);
+      }
+    }
+  }
+
+  //------------------------------------------------------------------------------------------------------------------------------------------
+ 
   template void LArPandoraHelper::GetAssociatedHits(const art::Event&,
                                                     const std::string&,
                                                     const std::vector<art::Ptr<recob::Cluster>>&,
@@ -1527,5 +1282,33 @@ namespace lar_pandora {
                                                     const std::vector<art::Ptr<recob::SpacePoint>>&,
                                                     HitVector&,
                                                     const pandora::IntVector* const);
+
+#define INSTANTIATE_COLLECT_PRODUCTS(T) \
+  template void LArPandoraHelper::CollectProducts( \
+    const art::Event&, const std::string&, std::vector<art::Ptr<T>>&);
+
+  INSTANTIATE_COLLECT_PRODUCTS(recob::Hit)
+  INSTANTIATE_COLLECT_PRODUCTS(recob::Wire)
+  INSTANTIATE_COLLECT_PRODUCTS(recob::PFParticle)
+
+#define INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(T, U) \
+  template void LArPandoraHelper::CollectWithDownstreamProducts( \
+    const art::Event&, const std::string&, std::vector<art::Ptr<T>>&, std::map<art::Ptr<T>, std::vector<art::Ptr<U>>>&);
+
+  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::Cluster,    recob::Hit)
+  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::Track,      recob::Hit)
+  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::Shower,     recob::Hit)
+  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::PFParticle, recob::SpacePoint)
+  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::PFParticle, recob::Cluster)
+  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::PFParticle, larpandoraobj::PFParticleMetadata)
+
+#define INSTANTIATE_COLLECT_WITH_UPSTREAM_PRODUCTS(T, U) \
+  template void LArPandoraHelper::CollectWithUpstreamProducts( \
+    const art::Event&, const std::string&, std::vector<art::Ptr<T>>&, std::map<art::Ptr<U>, std::vector<art::Ptr<T>>>&);
+  
+  INSTANTIATE_COLLECT_WITH_UPSTREAM_PRODUCTS(recob::Track,  recob::PFParticle)
+  INSTANTIATE_COLLECT_WITH_UPSTREAM_PRODUCTS(recob::Shower, recob::PFParticle)
+  INSTANTIATE_COLLECT_WITH_UPSTREAM_PRODUCTS(recob::Seed,   recob::PFParticle)
+  INSTANTIATE_COLLECT_WITH_UPSTREAM_PRODUCTS(recob::Vertex, recob::PFParticle)
 
 } // namespace lar_pandora
