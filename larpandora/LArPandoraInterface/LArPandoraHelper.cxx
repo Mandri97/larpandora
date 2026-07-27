@@ -154,7 +154,7 @@ namespace lar_pandora {
                                          ClusterVector& clusterVector,
                                          ClustersToHits& clustersToHits)
   {
-    CollectWithDownstreamProducts<recob::Cluster, recob::Hit>(evt, label, clusterVector, clustersToHits);
+    CollectWithDaughterObjects<recob::Cluster, recob::Hit>(evt, label, clusterVector, clustersToHits);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -164,7 +164,7 @@ namespace lar_pandora {
                                             PFParticleVector& particleVector,
                                             PFParticlesToSpacePoints& particlesToSpacePoints)
   {
-    CollectWithDownstreamProducts<recob::PFParticle, recob::SpacePoint>(evt, label, particleVector, particlesToSpacePoints);
+    CollectWithDaughterObjects<recob::PFParticle, recob::SpacePoint>(evt, label, particleVector, particlesToSpacePoints);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -174,7 +174,7 @@ namespace lar_pandora {
                                             PFParticleVector& particleVector,
                                             PFParticlesToClusters& particlesToClusters)
   {
-    CollectWithDownstreamProducts<recob::PFParticle, recob::Cluster>(evt, label, particleVector, particlesToClusters);
+    CollectWithDaughterObjects<recob::PFParticle, recob::Cluster>(evt, label, particleVector, particlesToClusters);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -184,7 +184,7 @@ namespace lar_pandora {
                                                    PFParticleVector& particleVector,
                                                    PFParticlesToMetadata& particlesToMetadata)
   {
-    CollectWithDownstreamProducts<recob::PFParticle, larpandoraobj::PFParticleMetadata>(evt, label, particleVector, particlesToMetadata);
+    CollectWithDaughterObjects<recob::PFParticle, larpandoraobj::PFParticleMetadata>(evt, label, particleVector, particlesToMetadata);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -194,27 +194,7 @@ namespace lar_pandora {
                                         ShowerVector& showerVector,
                                         PFParticlesToShowers& particlesToShowers)
   {
-    CollectWithUpstreamProducts<recob::Shower, recob::PFParticle>(evt, label, showerVector, particlesToShowers);
-  }
-
-  //------------------------------------------------------------------------------------------------------------------------------------------
-
-  void LArPandoraHelper::CollectTracks(const art::Event& evt,
-                                       const std::string& label,
-                                       TrackVector& trackVector,
-                                       PFParticlesToTracks& particlesToTracks)
-  {
-    CollectWithUpstreamProducts<recob::Track, recob::PFParticle>(evt, label, trackVector, particlesToTracks);
-  }
-
-  //------------------------------------------------------------------------------------------------------------------------------------------
-
-  void LArPandoraHelper::CollectTracks(const art::Event& evt,
-                                       const std::string& label,
-                                       TrackVector& trackVector,
-                                       TracksToHits& tracksToHits)
-  {
-    CollectWithDownstreamProducts<recob::Track, recob::Hit>(evt, label, trackVector, tracksToHits);
+    CollectWithParentParticles<recob::Shower>(evt, label, showerVector, particlesToShowers);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -224,17 +204,37 @@ namespace lar_pandora {
                                         ShowerVector& showerVector,
                                         ShowersToHits& showersToHits)
   {
-    CollectWithDownstreamProducts<recob::Shower, recob::Hit>(evt, label, showerVector, showersToHits);
+    CollectWithDaughterObjects<recob::Shower, recob::Hit>(evt, label, showerVector, showersToHits);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
 
-  void LArPandoraHelper::CollectSeeds(const art::Event& evt,
+  void LArPandoraHelper::CollectTracks(const art::Event& evt,
+                                       const std::string& label,
+                                       TrackVector& trackVector,
+                                       PFParticlesToTracks& particlesToTracks)
+  {
+    CollectWithParentParticles<recob::Track>(evt, label, trackVector, particlesToTracks);
+  }
+
+  //------------------------------------------------------------------------------------------------------------------------------------------
+
+  void LArPandoraHelper::CollectTracks(const art::Event& evt,
+                                       const std::string& label,
+                                       TrackVector& trackVector,
+                                       TracksToHits& tracksToHits)
+  {
+    CollectWithDaughterObjects<recob::Track, recob::Hit>(evt, label, trackVector, tracksToHits);
+  }
+
+  //------------------------------------------------------------------------------------------------------------------------------------------
+
+    void LArPandoraHelper::CollectSeeds(const art::Event& evt,
                                       const std::string& label,
                                       SeedVector& seedVector,
                                       PFParticlesToSeeds& particlesToSeeds)
   {
-    CollectWithUpstreamProducts<recob::Seed, recob::PFParticle>(evt, label, seedVector, particlesToSeeds);
+    CollectWithParentParticles<recob::Seed>(evt, label, seedVector, particlesToSeeds);
   }
     
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -271,7 +271,7 @@ namespace lar_pandora {
                                          VertexVector& vertexVector,
                                          PFParticlesToVertices& particlesToVertices)
   {
-    CollectWithUpstreamProducts<recob::Vertex, recob::PFParticle>(evt, label, vertexVector, particlesToVertices);
+    CollectWithParentParticles<recob::Vertex>(evt, label, vertexVector, particlesToVertices);
   }
     
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -530,18 +530,19 @@ namespace lar_pandora {
     art::Handle<std::vector<anab::T0>> theT0s;
     evt.getByLabel(label, theT0s);
 
-    if (theT0s.isValid()) {
-      art::FindManyP<recob::PFParticle> theAssns(theT0s, evt, label);
-      for (size_t i = 0; i < theT0s->size(); ++i) {
-        const art::Ptr<anab::T0> theT0(theT0s, i);
-        t0Vector.push_back(theT0);
+    if (! theT0s.isValid()) {
+      return;
+    }
 
-        const std::vector<art::Ptr<recob::PFParticle>> particles = theAssns.at(i);
-        for (size_t j = 0; j < particles.size(); ++j) {
-          const art::Ptr<recob::PFParticle> theParticle = particles.at(j);
-          particlesToT0s[theParticle].push_back(
-            theT0); // We assume there could be multiple T0s per PFParticle
-        }
+    art::FindManyP<recob::PFParticle> theAssns(theT0s, evt, label);
+    for (size_t i = 0; i < theT0s->size(); ++i) {
+      const art::Ptr<anab::T0> theT0(theT0s, i);
+      t0Vector.push_back(theT0);
+
+      const std::vector<art::Ptr<recob::PFParticle>> particles = theAssns.at(i);
+      for (size_t j = 0; j < particles.size(); ++j) {
+        const art::Ptr<recob::PFParticle> particle = particles.at(j);
+        particlesToT0s[particle].push_back(theT0); // We assume there could be multiple T0s per PFParticle
       }
     }
   }
@@ -579,13 +580,7 @@ namespace lar_pandora {
                                             const std::string& label,
                                             MCParticleVector& particleVector)
   {
-    art::ValidHandle<RawMCParticleVector> theParticles = 
-        evt.getValidHandle<RawMCParticleVector>(label);
-
-    for (size_t i = 0; i < theParticles->size(); ++i) {
-      const art::Ptr<simb::MCParticle> particle(theParticles, i);
-      particleVector.push_back(particle);
-    }
+    CollectProducts<simb::MCParticle>(evt, label, particleVector);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
@@ -1150,7 +1145,7 @@ namespace lar_pandora {
 
   bool LArPandoraHelper::IsTrack(const art::Ptr<recob::PFParticle> particle)
   {
-    const int pdg(particle->PdgCode());
+    const int pdg{particle->PdgCode()};
 
     // muon, pion, proton, kaon (use Pandora PDG tables)
     return ((pandora::MU_MINUS == std::abs(pdg)) || (pandora::PI_PLUS == std::abs(pdg)) ||
@@ -1161,7 +1156,7 @@ namespace lar_pandora {
 
   bool LArPandoraHelper::IsShower(const art::Ptr<recob::PFParticle> particle)
   {
-    const int pdg(particle->PdgCode());
+    const int pdg{particle->PdgCode()};
 
     // electron, photon (use Pandora PDG tables)
     return ((pandora::E_MINUS == std::abs(pdg)) || (pandora::PHOTON == std::abs(pdg)));
@@ -1199,7 +1194,7 @@ namespace lar_pandora {
   template <typename T>
   void LArPandoraHelper::CollectProducts(const art::Event& evt,
                                          const std::string& label,
-                                         std::vector<art::Ptr<T>>& productVector)
+                                         PtrVector<T>& productVector)
   {
     const auto &handle{ evt.getValidHandle<std::vector<T>>(label) };
 
@@ -1216,10 +1211,10 @@ namespace lar_pandora {
   //------------------------------------------------------------------------------------------------------------------------------------------
 
   template <typename T, typename U>
-  void LArPandoraHelper::CollectWithDownstreamProducts(const art::Event& evt,
-                                                       const std::string& label,
-                                                       std::vector<art::Ptr<T>>& productVector,
-                                                       std::map<art::Ptr<T>, std::vector<art::Ptr<U>>>& productToComponent)
+  void LArPandoraHelper::CollectWithDaughterObjects(const art::Event& evt,
+                                                    const std::string& label,
+                                                    PtrVector<T>& productVector,
+                                                    ProductMap<T, U>& productToObjects)
   {
     art::ValidHandle<std::vector<T>> products = 
         evt.getValidHandle<std::vector<T>>(label);
@@ -1229,25 +1224,31 @@ namespace lar_pandora {
                                << std::endl;
     
     art::FindManyP<U> assns(products, evt, label);
+
+    if (!assns.isValid()) {
+      mf::LogDebug("LArPandora") << "  Association failed ... " << std::endl;
+      return;
+    }
+
     for (size_t i = 0; i < products->size(); ++i) {
       const art::Ptr<T> product(products, i);
       productVector.push_back(product);
 
-      const std::vector<art::Ptr<U>> components = assns.at(i);
-      for (size_t j = 0; j < components.size(); ++j) {
-        const art::Ptr<U> component = components.at(j);
-        productToComponent[product].push_back(component);
+      const std::vector<art::Ptr<U>> objects = assns.at(i);
+      for (size_t j = 0; j < objects.size(); ++j) {
+        const art::Ptr<U> object = objects.at(j);
+        productToObjects[product].push_back(object);
       }
     }
   }
 
   //------------------------------------------------------------------------------------------------------------------------------------------
   
-  template <typename T, typename U>
-  void LArPandoraHelper::CollectWithUpstreamProducts(const art::Event& evt,
-                                                     const std::string& label,
-                                                     std::vector<art::Ptr<T>>& productVector,
-                                                     std::map<art::Ptr<U>, std::vector<art::Ptr<T>>>& productToComponent)
+  template <typename T>
+  void LArPandoraHelper::CollectWithParentParticles(const art::Event& evt,
+                                                    const std::string& label,
+                                                    PtrVector<T>& productVector,
+                                                    ProductMap<recob::PFParticle, T>& particlesToProducts)
   {
     art::ValidHandle<std::vector<T>> products = 
         evt.getValidHandle<std::vector<T>>(label);
@@ -1256,15 +1257,21 @@ namespace lar_pandora {
     mf::LogDebug("LArPandora") << "  Found: " << products->size() << " " << typeid(T).name()
                                << std::endl;
     
-    art::FindManyP<U> assns(products, evt, label);
+    art::FindManyP<recob::PFParticle> assns(products, evt, label);
+
+    if (!assns.isValid()) {
+      mf::LogDebug("LArPandora") << "  Association failed ... " << std::endl;
+      return;
+    }
+
     for (size_t i = 0; i < products->size(); ++i) {
       const art::Ptr<T> product(products, i);
       productVector.push_back(product);
 
-      const std::vector<art::Ptr<U>> components = assns.at(i);
-      for (size_t j = 0; j < components.size(); ++j) {
-        const art::Ptr<U> component = components.at(j);
-        productToComponent[component].push_back(product);
+      const std::vector<art::Ptr<recob::PFParticle>> particles = assns.at(i);
+      for (size_t j = 0; j < particles.size(); ++j) {
+        const art::Ptr<recob::PFParticle> particle = particles.at(j);
+        particlesToProducts[particle].push_back(product);
       }
     }
   }
@@ -1285,30 +1292,31 @@ namespace lar_pandora {
 
 #define INSTANTIATE_COLLECT_PRODUCTS(T) \
   template void LArPandoraHelper::CollectProducts( \
-    const art::Event&, const std::string&, std::vector<art::Ptr<T>>&);
+    const art::Event&, const std::string&, PtrVector<T>&);
 
   INSTANTIATE_COLLECT_PRODUCTS(recob::Hit)
   INSTANTIATE_COLLECT_PRODUCTS(recob::Wire)
   INSTANTIATE_COLLECT_PRODUCTS(recob::PFParticle)
+  INSTANTIATE_COLLECT_PRODUCTS(simb::MCParticle)
 
-#define INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(T, U) \
-  template void LArPandoraHelper::CollectWithDownstreamProducts( \
-    const art::Event&, const std::string&, std::vector<art::Ptr<T>>&, std::map<art::Ptr<T>, std::vector<art::Ptr<U>>>&);
+#define INSTANTIATE_COLLECT_WITH_DAUGHTER_OBJECTS(T, U) \
+  template void LArPandoraHelper::CollectWithDaughterObjects( \
+    const art::Event&, const std::string&, PtrVector<T>&, ProductMap<T, U>&);
 
-  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::Cluster,    recob::Hit)
-  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::Track,      recob::Hit)
-  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::Shower,     recob::Hit)
-  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::PFParticle, recob::SpacePoint)
-  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::PFParticle, recob::Cluster)
-  INSTANTIATE_COLLECT_WITH_DOWNSTREAM_PRODUCTS(recob::PFParticle, larpandoraobj::PFParticleMetadata)
+  INSTANTIATE_COLLECT_WITH_DAUGHTER_OBJECTS(recob::Cluster,    recob::Hit)
+  INSTANTIATE_COLLECT_WITH_DAUGHTER_OBJECTS(recob::Track,      recob::Hit)
+  INSTANTIATE_COLLECT_WITH_DAUGHTER_OBJECTS(recob::Shower,     recob::Hit)
+  INSTANTIATE_COLLECT_WITH_DAUGHTER_OBJECTS(recob::PFParticle, recob::SpacePoint)
+  INSTANTIATE_COLLECT_WITH_DAUGHTER_OBJECTS(recob::PFParticle, recob::Cluster)
+  INSTANTIATE_COLLECT_WITH_DAUGHTER_OBJECTS(recob::PFParticle, larpandoraobj::PFParticleMetadata)
 
-#define INSTANTIATE_COLLECT_WITH_UPSTREAM_PRODUCTS(T, U) \
-  template void LArPandoraHelper::CollectWithUpstreamProducts( \
-    const art::Event&, const std::string&, std::vector<art::Ptr<T>>&, std::map<art::Ptr<U>, std::vector<art::Ptr<T>>>&);
+#define INSTANTIATE_COLLECT_WITH_PARENT_PARTICLES(T) \
+  template void LArPandoraHelper::CollectWithParentParticles( \
+    const art::Event&, const std::string&, PtrVector<T>&, ProductMap<recob::PFParticle, T>&);
   
-  INSTANTIATE_COLLECT_WITH_UPSTREAM_PRODUCTS(recob::Track,  recob::PFParticle)
-  INSTANTIATE_COLLECT_WITH_UPSTREAM_PRODUCTS(recob::Shower, recob::PFParticle)
-  INSTANTIATE_COLLECT_WITH_UPSTREAM_PRODUCTS(recob::Seed,   recob::PFParticle)
-  INSTANTIATE_COLLECT_WITH_UPSTREAM_PRODUCTS(recob::Vertex, recob::PFParticle)
+  INSTANTIATE_COLLECT_WITH_PARENT_PARTICLES(recob::Track)
+  INSTANTIATE_COLLECT_WITH_PARENT_PARTICLES(recob::Shower)
+  INSTANTIATE_COLLECT_WITH_PARENT_PARTICLES(recob::Seed)
+  INSTANTIATE_COLLECT_WITH_PARENT_PARTICLES(recob::Vertex)
 
 } // namespace lar_pandora
