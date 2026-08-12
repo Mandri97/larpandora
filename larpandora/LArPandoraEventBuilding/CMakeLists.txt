@@ -82,6 +82,23 @@ cet_build_plugin(LArPandoraTrackCreation art::EDProducer
   fhiclcpp::fhiclcpp
 )
 
+cet_build_plugin(LArPandoraKalmanTrackCreation art::EDProducer
+  LIBRARIES PRIVATE
+  larpandora::GetDetectorType
+  larpandora::LArPandoraInterface_Detectors
+  larpandora::LArPandoraInterface
+  larpandoracontent::LArPandoraContent
+  lardata::AssociationUtil
+  larcore::Geometry_Geometry_service
+  lardataobj::RecoBase
+  art::Framework_Principal
+  art::Persistency_Common
+  canvas::canvas
+  messagefacility::MF_MessageLogger
+  fhiclcpp::fhiclcpp
+)
+
+
 add_subdirectory(fcl)
 
 install_headers()
