@@ -74,6 +74,7 @@ namespace lar_pandora {
     double       m_initialCovariance;
     double       m_dt;
     unsigned int m_minTrajectoryPoints;           ///< The minimum number of trajectory points
+    unsigned int m_nSeedPoints;                   ///< Number of points to seed
     bool         m_useAllParticles;               ///< Build a recob::Track for every recob::PFParticle
   };
 
@@ -94,6 +95,7 @@ namespace lar_pandora {
     , m_initialCovariance(pset.get<double>("initialCovariance", 1.0))
     , m_dt(pset.get<double>("dt", 1.0))
     , m_minTrajectoryPoints(pset.get<unsigned int>("MinTrajectoryPoints", 2))
+    , m_nSeedPoints(pset.get<unsigned int>("nSeedPoints", 5))
     , m_useAllParticles(pset.get<bool>("UseAllParticles", false))
   {
     produces<std::vector<recob::Track>>();
@@ -191,31 +193,33 @@ namespace lar_pandora {
       particleToVertexIter->second.front()->XYZ(vertexXYZ);
       const pandora::CartesianVector vertexPosition(vertexXYZ[0], vertexXYZ[1], vertexXYZ[2]);
 
-      // Sort space spoints using the vertex position as starting point then by their distance relative to the last hit
-      std::sort(cartesianPointVector.begin(), cartesianPointVector.end(), 
+      const unsigned int nPointVector = cartesianPointVector.size();
+
+      // Find the nearest point relative to the vertex
+      const auto firstPointIter = std::min_element(cartesianPointVector.begin(), cartesianPointVector.end(),
         [vertexPosition](const pandora::CartesianVector& lhs, const pandora::CartesianVector& rhs)
         { return lhs.GetDistanceSquared(vertexPosition) < rhs.GetDistanceSquared(vertexPosition); }
       );
 
-      const unsigned int nPointVector = cartesianPointVector.size();
+      const auto firstPointIndex = std::distance(cartesianPointVector.begin(), firstPointIter);
 
       pandora::CartesianPointVector sortedCartesianPointVector;
       sortedCartesianPointVector.reserve(nPointVector);
-
-      std::vector<bool> isSorted(nPointVector, false);
+      std::vector<bool> isPointSorted(nPointVector, false);
 
       // Starting space point
-      sortedCartesianPointVector.emplace_back(cartesianPointVector.at(0));
-      isSorted.at(0) = true;
+      sortedCartesianPointVector.emplace_back(cartesianPointVector.at(firstPointIndex));
+      isPointSorted.at(0) = true;
 
       unsigned int nSortedPoints = 1;
 
+      // Nearest neighbor sorting
       for( unsigned int pointIndex = 1; pointIndex < nPointVector; ++pointIndex ){
         float minDistance = std::numeric_limits<float>::max();
         unsigned int nearestNeighborIndex = std::numeric_limits<unsigned int>::max();
 
         for( unsigned int nextPointIndex = 0; nextPointIndex < nPointVector; ++nextPointIndex ){
-          if( isSorted.at(nextPointIndex) ) continue;
+          if( isPointSorted.at(nextPointIndex) ) continue;
                   
           if( nextPointIndex != pointIndex ){
             const float distance = cartesianPointVector.at(pointIndex).GetDistanceSquared(
@@ -232,7 +236,7 @@ namespace lar_pandora {
           
         if( nearestNeighborIndex != std::numeric_limits<unsigned int>::max() ){
           sortedCartesianPointVector.emplace_back(cartesianPointVector.at(nearestNeighborIndex));
-          isSorted.at(nearestNeighborIndex) = true;
+          isPointSorted.at(nearestNeighborIndex) = true;
           ++nSortedPoints;
         }
       }
@@ -242,23 +246,54 @@ namespace lar_pandora {
           << "sortedCartesianPointVector.size() is different than cartesianPointVector.size()";
       }
 
-      // Initial position
-      std::vector<pandora::CartesianVector>::const_iterator spacePointIter = sortedCartesianPointVector.begin();
-      lar_content::KalmanFilter3D::PositionVector initialState{convertSpacePointToPosition(*(spacePointIter++))};
+      std::vector<bool> isPointUsed(nPointVector, false);
+      isPointUsed.at(0) = true;
 
-      lar_content::KalmanFilter3D fitter(
-        m_dt, m_processVariance, m_measurementVariance, initialState, m_initialCovariance);
+      std::vector<pandora::CartesianVector>::const_iterator spacePointIter = sortedCartesianPointVector.begin();
+      lar_content::KalmanFilter3D::PositionVector initialPosition{convertSpacePointToPosition(*(spacePointIter++))};
+
+      lar_content::KalmanFilter3D fitter(m_dt, m_processVariance, m_measurementVariance, initialPosition, m_initialCovariance);
       
       pandora::IntVector indicesWithInvalidSpacePoint; 
       int index{0};
 
       std::vector<std::pair<int, lar_content::KalmanFilter3D::StateVector>> statesWithIndex;
-      for( ; spacePointIter <= sortedCartesianPointVector.end(); spacePointIter++ ){
+
+      // Seeding the fitter
+      for( unsigned int pointIndex = 1; pointIndex < nPointVector; ++pointIndex ){
         fitter.Predict();
 
-        if( spacePointIter < sortedCartesianPointVector.end() ){
-          lar_content::KalmanFilter3D::MeasurementVector measurementState{convertSpacePointToPosition(*spacePointIter)};
-          fitter.Update(measurementState);
+        if( pointIndex < m_nSeedPoints ){
+          const pandora::CartesianVector& point = sortedCartesianPointVector.at(pointIndex);
+          lar_content::KalmanFilter3D::MeasurementVector seedMeasurement{ convertSpacePointToPosition(point) };
+
+          fitter.Update(seedMeasurement);
+          isPointUsed.at(pointIndex) = true;
+        } else {
+          // Pick the point that minimize the Mahalanobis distance
+           double minMahalanobisDist = std::numeric_limits<double>::max();
+           unsigned int minMahalanobisDistIndex = std::numeric_limits<unsigned int>::max();
+
+          for( unsigned int nextPointIndex = 0; nextPointIndex < nPointVector; ++nextPointIndex ){
+            if( isPointSorted.at(nextPointIndex) ) continue;
+
+            const pandora::CartesianVector& nextPoint = sortedCartesianPointVector.at(nextPointIndex);
+            lar_content::KalmanFilter3D::MeasurementVector nextMeasurement{ convertSpacePointToPosition(nextPoint) };
+            const double mahalanobisDist = fitter.GetMahalanobisDistance(nextMeasurement, true);
+
+            if( minMahalanobisDist > mahalanobisDist ){
+              minMahalanobisDist = mahalanobisDist;
+              minMahalanobisDistIndex = nextPointIndex;
+            }
+          }
+
+          if( minMahalanobisDistIndex != std::numeric_limits<unsigned int>::max() ){
+            const pandora::CartesianVector& bestPoint = sortedCartesianPointVector.at(minMahalanobisDistIndex);
+            lar_content::KalmanFilter3D::MeasurementVector bestMeasurement{ convertSpacePointToPosition(bestPoint) };
+
+            fitter.Update(bestMeasurement);
+            isPointUsed.at(minMahalanobisDistIndex) = true;
+          }
         }
 
         lar_content::KalmanFilter3D::StateVector state{fitter.GetState()};
